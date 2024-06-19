@@ -34,6 +34,9 @@ def valuation(entries, options_map, config_str=None):
     Returns:
       A list of new errors, if any were found.
     """
+
+    # Configuration defined via valuation-config statement is a dictionary
+    # where key is the account name and value is the name of the synthetical currency to be used
     account_mapping = {}
 
     commodities_present = set()
@@ -41,9 +44,20 @@ def valuation(entries, options_map, config_str=None):
     prices = []
     errors = []
     new_entries = []
+
+    # We'll track balances of the relevant accounts here
     balances = collections.defaultdict(inventory.Inventory)
+
     for entry in entries:
-        if isinstance(entry, Transaction):
+        if isinstance(entry, Custom) and entry.type == 'valuation-config':
+            # print('valuation-config', entry.values[0].value)
+            config_str = entry.values[0].value.strip()
+            if config_str and config_str:
+                account_mapping = eval(config_str, {}, {})
+                if not isinstance(account_mapping, dict):
+                    raise RuntimeError("Invalid configuration")
+        elif isinstance(entry, Transaction):
+            # Replace postings if the account is in the plugin configuration
             new_postings = []
             for posting in entry.postings:
                 if posting.account in account_mapping:
@@ -77,8 +91,8 @@ def valuation(entries, options_map, config_str=None):
                               meta=posting.meta)
                         )
                     # print('posting', posting)
-                    output = io.StringIO()
-                    beancount.parser.printer.print_entry(modified_posting, file=output)
+                    # output = io.StringIO()
+                    # beancount.parser.printer.print_entry(modified_posting, file=output)
                     # print('modified_posting', output.getvalue())
                     new_postings.append(modified_posting)
                 else:
@@ -95,8 +109,8 @@ def valuation(entries, options_map, config_str=None):
                 tags=entry.tags,
                 links=entry.links,
                 postings=new_postings)
-            output = io.StringIO()
-            beancount.parser.printer.print_entry(transaction, file=output)
+            # output = io.StringIO()
+            # beancount.parser.printer.print_entry(transaction, file=output)
             # print('modified_transaction', output.getvalue())
 
             new_entries.append(transaction)
@@ -109,13 +123,6 @@ def valuation(entries, options_map, config_str=None):
             )
             balances[entry.account].add_position(pos)
             new_entries.append(entry)
-        elif isinstance(entry, Custom) and entry.type == 'valuation-config':
-            # print('valuation-config', entry.values[0].value)
-            config_str = entry.values[0].value.strip()
-            if config_str and config_str:
-                account_mapping = eval(config_str, {}, {})
-                if not isinstance(account_mapping, dict):
-                    raise RuntimeError("Invalid configuration")
         elif isinstance(entry, Custom) and entry.type == 'valuation':
             # print(entry.values)
             account, valuation_amount = entry.values
@@ -138,12 +145,15 @@ def valuation(entries, options_map, config_str=None):
             # new_entry = Custom(meta, entry.date, entry.type, entry.values)
             new_entries.append(entry)
         elif isinstance(entry, Commodity):
+            # Just keep track of all the commodities defined in the ledger
             commodities_present.add(entry.currency)
             new_entries.append(entry)
         else:
+            # No-op on all other entries
             new_entries.append(entry)
-            
-    # print('account_mapping', account_mapping)
+
+    # If the fictional synthesized currency hasn't been defined by the user, 
+    # define it automatically
     for account, acc_currency in account_mapping.items():
         if acc_currency not in commodities_present:
           commodity = Commodity(entry.meta, entry.date, acc_currency)
