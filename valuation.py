@@ -1,8 +1,10 @@
 """
-A Beancount plugin that allows to specify total investment account value over time
-and creates an underlying fictional commodity to keep all system working.
+A Beancount plugin that allows to specify total investment account value over 
+time and creates an underlying fictional commodity which price is set up to 
+match total value of the account over time.
 
-Meanwhile all incoming and outcoming transactions are taken into account.
+All incoming and outcoming transactions in and from account are converted into
+transactions buying and selling this commodity at calculated price at the date.
 """
 
 import collections
@@ -19,24 +21,16 @@ from beancount.core import inventory
 from beancount.core.position import Position
 from decimal import Decimal
 import beancount.core.convert
+import beancount.core.prices
 import beancount.parser.printer
 import io
 
 __plugins__ = ['valuation']
 
 def valuation(entries, options_map, config_str=None):
-    """Convert
-
-    Args:
-      entries: A list of directives.
-      unused_options_map: An options map.
-      config_str: The configuration as a string version of a float.
-    Returns:
-      A list of new errors, if any were found.
-    """
-
     # Configuration defined via valuation-config statement is a dictionary
-    # where key is the account name and value is the name of the synthetical currency to be used
+    # where key is the account name and value is the name of the synthetical 
+    # currency to be used
     account_mapping = {}
 
     commodities_present = set()
@@ -47,10 +41,11 @@ def valuation(entries, options_map, config_str=None):
 
     # We'll track balances of the relevant accounts here
     balances = collections.defaultdict(inventory.Inventory)
+    # and will keep the last calculated price
+    last_price = {}
 
     for entry in entries:
         if isinstance(entry, Custom) and entry.type == 'valuation-config':
-            # print('valuation-config', entry.values[0].value)
             config_str = entry.values[0].value.strip()
             if config_str and config_str:
                 account_mapping = eval(config_str, {}, {})
@@ -60,18 +55,33 @@ def valuation(entries, options_map, config_str=None):
             # Replace postings if the account is in the plugin configuration
             new_postings = []
             for posting in entry.postings:
+                balance = balances[posting.account]
                 if posting.account in account_mapping:
-                    modified_currency = account_mapping[posting.account]
+                    mapped_currency = account_mapping[posting.account]
+
+                    price_map = beancount.core.prices.build_price_map(prices)
+                    balance_reduced = balance.reduce(beancount.core.convert.convert_position, mapped_currency, price_map)
+                    balance_position = balance_reduced.get_only_position()
+                    if not balance_position:
+                        # first posting, assume price 1.0
+                        price = Price(entry.meta, entry.date, mapped_currency, Amount(Decimal(1.0), posting.units.currency)) # type: ignore
+                        prices.append(price)
+
+                    last_valuation_price = last_price.get(mapped_currency, Decimal(1.0))
+                    total_in_mapped_currency = posting.units.number / last_valuation_price
+
                     modified_posting = Posting(
                         posting.account, 
-                        Amount(posting.units.number, modified_currency), 
-                        cost=Cost(Decimal(1.0), posting.units.currency, entry.date, None),
-                        price=None,
+                        Amount(total_in_mapped_currency, mapped_currency), 
+                        cost=None,
+                        price=Amount(last_valuation_price, posting.units.currency),
                         flag=posting.flag,
                         meta=posting.meta)
+
                     if posting.price:
                         # Specifying cost and price together all in different currencies doesn't work
-                        # Instead, add a balancing "conversion" to original currency, then to modified_currency at cost
+                        # Instead, add a balancing "conversion" to original currency, in addition to mapped_currency 
+                        # at cost above
                         new_postings.append(
                             Posting(
                               posting.account, 
@@ -90,16 +100,11 @@ def valuation(entries, options_map, config_str=None):
                               flag=posting.flag,
                               meta=posting.meta)
                         )
-                    # print('posting', posting)
-                    # output = io.StringIO()
-                    # beancount.parser.printer.print_entry(modified_posting, file=output)
-                    # print('modified_posting', output.getvalue())
                     new_postings.append(modified_posting)
+                    balance.add_position(modified_posting)
                 else:
                     new_postings.append(posting)
-
-                balance = balances[posting.account]
-                balance.add_position(posting)
+                    balance.add_position(posting)
             transaction = Transaction(
                 entry.meta,
                 entry.date,
@@ -109,40 +114,34 @@ def valuation(entries, options_map, config_str=None):
                 tags=entry.tags,
                 links=entry.links,
                 postings=new_postings)
-            # output = io.StringIO()
-            # beancount.parser.printer.print_entry(transaction, file=output)
-            # print('modified_transaction', output.getvalue())
 
             new_entries.append(transaction)
         elif isinstance(entry, Balance) and entry.account in account_mapping:
-            modified_currency = account_mapping[entry.account]
+            mapped_currency = account_mapping[entry.account]
             balances[entry.account] = inventory.Inventory()
             pos = Position(
-              units=Amount(entry.amount.number, modified_currency),
+              units=Amount(entry.amount.number, mapped_currency),
               cost=Cost(Decimal(1.0), entry.amount.currency, entry.date, None)
             )
             balances[entry.account].add_position(pos)
             new_entries.append(entry)
         elif isinstance(entry, Custom) and entry.type == 'valuation':
-            # print(entry.values)
             account, valuation_amount = entry.values
             account = account.value
 
             valuation_currency = account_mapping[account]
             valuation_amount = valuation_amount.value
             balance = balances[account]
-            # print('valuation', account, ' va ', valuation_amount, ' ba ', balance)
-            # if balance is 0, error
-            balance_reduced = balance.reduce(beancount.core.convert.get_cost)
+            
+            price_map = beancount.core.prices.build_price_map(prices)
+            balance_reduced = balance.reduce(beancount.core.convert.convert_position, mapped_currency, price_map)
             balance_position = balance_reduced.get_only_position()
-            # print('balance_position', balance_position)
             price = Price(entry.meta, entry.date, valuation_currency, 
-                          Amount(valuation_amount.number/balance_position.units.number, balance_position.units.currency))
-            # print(price)
+                          Amount(valuation_amount.number/balance_position.units.number, valuation_amount.currency))
+            last_price[valuation_currency] = price.amount.number
+
             prices.append(price)
-            # TODO: output calculated price
-            # meta = entry.meta
-            # new_entry = Custom(meta, entry.date, entry.type, entry.values)
+
             new_entries.append(entry)
         elif isinstance(entry, Commodity):
             # Just keep track of all the commodities defined in the ledger
