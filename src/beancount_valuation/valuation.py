@@ -20,7 +20,8 @@ import decimal
 from decimal import Decimal
 
 # Note: do not use from beancount.parser import booking !
-# There's a non-obvious
+# There's a non-obvious bug while working with the beancount-import library:
+# see "intercept_book" function
 from beancount.parser import booking_full
 
 def round_down(value, decimals):
@@ -204,7 +205,8 @@ def valuation(entries, options_map, config_str=None):
           commodities.append(commodity)
 
     # Call booking.book to automatically fill unspecified cost values for out-flows
-    # TODO: if it's not called, MISSING values trigger error. Would it be possible to avoid these calls?
+    # If it's not called, MISSING values or other absent values trigger error. 
+    # TODO: Would it be possible to avoid these calls?
     booking_methods = collections.defaultdict(lambda: options_map["booking_method"])
     cost_processed_transactions, cost_processed_errors = booking_full.book(
         modified_transactions, options_map, booking_methods)
