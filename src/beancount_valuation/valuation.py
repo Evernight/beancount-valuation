@@ -16,8 +16,6 @@ from beancount.core.data import Amount
 from beancount.core.data import Posting
 from beancount.core.data import Commodity
 from beancount.core.data import Balance
-from beancount.core.position import CostSpec
-from beancount.core.number import MISSING
 import decimal
 from decimal import Decimal
 
@@ -76,7 +74,16 @@ def valuation(entries, options_map, config_str=None):
                     transaction_modified = True
                     mapped_currency, pnl_account = account_mapping[posting.account]
 
-                    last_valuation_price = last_price.get(mapped_currency, Decimal(1.0))
+                    if mapped_currency in last_price:
+                        last_valuation_price = last_price[mapped_currency]
+                    else:
+                        # There was no valuation operation before, set default mapped curency to equal value as currency
+                        last_valuation_price = Decimal(1.0)
+                        price = Price(
+                            entry.meta, entry.date, mapped_currency,
+                            Amount(Decimal(1.0), posting.units.currency)
+                        )
+                        prices.append(price)
                     total_in_mapped_currency = posting.units.number / last_valuation_price
 
                     if posting.units.number > 0:
@@ -84,15 +91,17 @@ def valuation(entries, options_map, config_str=None):
                         modified_posting = Posting(
                             posting.account,
                             Amount(round_up(total_in_mapped_currency, MAPPED_CURRENCY_PRECISION), mapped_currency), 
-                            cost=CostSpec(last_valuation_price, None, posting.units.currency, entry.date, None, False),
-                            price=None,
+                            cost=None,
+                            price=Amount(last_valuation_price, posting.units.currency), 
                             flag=posting.flag,
                             meta=posting.meta)
                     else:
+                        # Cash out-flow, "sell" underlying currency
                         modified_posting = Posting(
                             posting.account,
                             Amount(round_down(total_in_mapped_currency, MAPPED_CURRENCY_PRECISION), mapped_currency), 
-                            cost=CostSpec(MISSING, None, posting.units.currency, None, None, False),
+                            # cost=CostSpec(MISSING, None, posting.units.currency, None, None, False),
+                            cost=None,
                             price=Amount(last_valuation_price, posting.units.currency),
                             flag=posting.flag,
                             meta=posting.meta)
