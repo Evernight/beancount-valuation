@@ -4,12 +4,12 @@ A Beancount plugin to track total value of the opaque fund. You can use it inste
 You can use it instead of combination of ```pad```/```balance``` checks to avoid generating realized gains/losses in the account.
 
 ## Install
-    git clone git@github.com:Evernight/beancount-valuation.git
+    pip install git+https://github.com/Evernight/beancount-valuation
 
 ## Usage
 Enable plugin in the ledger
 
-    plugin "beancount-valuation.valuation"
+    plugin "beancount_valuation.valuation"
 
 Then define accounts of the opaque funds with two parameters (a Python tuple):
 1. The corresponding commodity name. These don't really matter and are just for your own reference.
@@ -36,10 +36,11 @@ transactions in/out of the account.
 
 ## Example
 
+    1970-01-01 open Assets:Physical:Cash
     1970-01-01 open Assets:CoolFund:Total "FIFO"
     1970-01-01 open Income:CoolFund:PnL
 
-    plugin "beancount-valuation.valuation"
+    plugin "beancount_valuation.valuation"
     1970-01-01 custom "valuation-config" "{
         'Assets:CoolFund:Total': ('COOL_FUND_USD', 'Income:CoolFund:PnL'),
     }"
