@@ -1,5 +1,5 @@
 ## Valuation
-A Beancount plugin to track total value of the opaque fund. You can use it instead of the ```balance``` operation to assert total value of the account. If the value of the account is currently different, it will instead alter price of the underlying synthetical commodity created by the plugin used for technical purposes.
+A Beancount plugin to track total value of the opaque fund. You can use it instead of the ```balance``` operation to assert total value of the account. If the (market) value of the account is different from asserted, the plugin alter price of the underlying synthetical commodity used for technical purposes so that market value matches the new one.
 
 You can use it instead of combination of ```pad```/```balance``` checks to avoid generating realized gains/losses in the account.
 
@@ -26,10 +26,8 @@ Then you can define sample points in time of the total account value using
 
     2024-01-05 custom "valuation" Assets:FirstOpaqueFund:Total           2345 EUR
 
-Note that multiple currencies per account are not supported.
-
-You can use the fund accounts in transactions as usual, just make sure that only one currency per account is used.
-The total fund value will be correctly shown in all operations / Fava interfaces.
+You can use the fund accounts in transactions as usual, just make sure that only one currency per account is used throughout ledger. Multiple currencies per account are not supported.
+The total fund value will be correctly shown in all operations / Fava interfaces when "Convert to EUR" (or USD, or any other of your working currencies) is selected.
 
 You can use one `balance` statement to define initial balance of the account but it has to be before you define 
 transactions in/out of the account.
