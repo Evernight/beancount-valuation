@@ -54,7 +54,7 @@ transactions in/out of the account.
     2024-03-11 custom "valuation" Assets:CoolFund:Total 1100 USD
 
     ; Withdraw 500 USD, after which 600 USD remains which corresponds to 545.45455
-    ; in COOL_FUND_USD (still worth 1.1 USD) ???
+    ; in COOL_FUND_USD (still worth 1.1 USD)
     2024-03-13 * "Withdraw $500 from CoolFund"
         Assets:Physical:Cash    500.00 USD
         Assets:CoolFund:Total  -500.00 USD
