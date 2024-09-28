@@ -166,7 +166,7 @@ def valuation(entries, options_map, config_str=None):
             
             price = Price(
                 entry.meta, entry.date, mapped_currency,
-                Amount(Decimal(1.0), valuation_amount.currency)
+                Amount(Decimal(1.0), entry.amount.currency)
             )
             last_price[mapped_currency] = Decimal(1.0)
             balances[entry.account] = entry.amount.number
