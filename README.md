@@ -3,6 +3,8 @@ A Beancount plugin to track total value of the opaque fund. You can use it inste
 
 You can use it instead of combination of ```pad```/```balance``` checks to avoid generating realized gains/losses in the account.
 
+NOTE: prefer updated version from [beancount-lazy-plugins](https://github.com/Evernight/beancount-lazy-plugins)
+
 ## Install
     pip install git+https://github.com/Evernight/beancount-valuation
 
